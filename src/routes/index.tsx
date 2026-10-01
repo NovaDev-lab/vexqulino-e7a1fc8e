@@ -43,7 +43,7 @@ function Index() {
 
   const submit = () => {
     if (busy || (!input.trim() && !files)) return;
-    sendMessage({ text: input, files: files ?? undefined }, { body: { model, thinking } });
+    sendMessage(files ? { text: input, files } : { text: input }, { body: { model, thinking } });
     setInput("");
     setFiles(null);
     if (fileRef.current) fileRef.current.value = "";
