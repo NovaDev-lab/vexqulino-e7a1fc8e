@@ -16,7 +16,7 @@ export const Route = createFileRoute("/api/chat")({
           model?: string;
           thinking?: boolean;
         };
-        const model = MODELS.includes(body.model ?? "") ? body.model! : MODELS[0];
+        const model: string = body.model && MODELS.includes(body.model) ? body.model : "claude-sonnet-4-5";
         const anthropic = createAnthropic({ apiKey });
 
         const result = streamText({
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/api/chat")({
           abortSignal: request.signal,
           providerOptions: body.thinking
             ? { anthropic: { thinking: { type: "enabled", budgetTokens: 8000 } } }
-            : undefined,
+            : {},
         });
 
         return result.toUIMessageStreamResponse({

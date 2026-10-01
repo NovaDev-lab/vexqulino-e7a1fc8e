@@ -27,7 +27,7 @@ const MODELS = [
 ];
 
 function Index() {
-  const [model, setModel] = useState(MODELS[0].id);
+  const [model, setModel] = useState("claude-sonnet-4-5");
   const [thinking, setThinking] = useState(false);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileList | null>(null);
