@@ -9,10 +9,10 @@ import { ArrowUp, Square, Paperclip, Brain, X, Zap } from "lucide-react";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "NEON — Claude Chat" },
-      { name: "description", content: "A futuristic neon chat powered by Claude, with thinking, image and file understanding." },
-      { property: "og:title", content: "NEON — Claude Chat" },
-      { property: "og:description", content: "A futuristic neon chat powered by Claude." },
+      { title: "NEON — AI Chat" },
+      { name: "description", content: "A futuristic neon chat with streaming answers, thinking, image and file understanding." },
+      { property: "og:title", content: "NEON — AI Chat" },
+      { property: "og:description", content: "A futuristic neon chat with streaming answers." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -20,14 +20,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-const MODELS = [
-  { id: "claude-sonnet-4-5", label: "Sonnet" },
-  { id: "claude-opus-4-1", label: "Opus" },
-  { id: "claude-haiku-4-5", label: "Haiku" },
-];
-
 function Index() {
-  const [model, setModel] = useState("claude-sonnet-4-5");
   const [thinking, setThinking] = useState(false);
   const [input, setInput] = useState("");
   const [files, setFiles] = useState<FileList | null>(null);
@@ -45,7 +38,7 @@ function Index() {
 
   const submit = () => {
     if (busy || (!input.trim() && !files)) return;
-    sendMessage(files ? { text: input, files } : { text: input }, { body: { model, thinking } });
+    sendMessage(files ? { text: input, files } : { text: input }, { body: { thinking } });
     setInput("");
     setFiles(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -60,19 +53,7 @@ function Index() {
           </div>
           <span className="font-display text-lg tracking-[0.3em] neon-text">NEON</span>
         </div>
-        <div className="flex gap-1 rounded-full border border-border bg-card/60 p-1">
-          {MODELS.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setModel(m.id)}
-              className={`rounded-full px-3 py-1 text-xs font-mono transition ${
-                model === m.id ? "bg-primary text-primary-foreground neon-glow" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <span className="rounded-full border border-border bg-card/60 px-3 py-1 font-mono text-xs text-muted-foreground">GPT-6 Astra</span>
       </header>
 
       <main className="flex-1 overflow-y-auto">
