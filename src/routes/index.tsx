@@ -39,7 +39,9 @@ function Index() {
   });
   const busy = status === "submitted" || status === "streaming";
 
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [messages, status]);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, status]);
 
   const submit = () => {
     if (busy || (!input.trim() && !files)) return;
