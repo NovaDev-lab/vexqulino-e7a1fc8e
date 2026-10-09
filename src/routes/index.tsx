@@ -4,15 +4,15 @@ import { DefaultChatTransport } from "ai";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowUp, Square, Paperclip, Brain, X, Zap } from "lucide-react";
+import { ArrowUp, Square } from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "NEON — AI Chat" },
-      { name: "description", content: "A futuristic neon chat with streaming answers, thinking, image and file understanding." },
-      { property: "og:title", content: "NEON — AI Chat" },
-      { property: "og:description", content: "A futuristic neon chat with streaming answers." },
+      { title: "NEON Triad — Claude, Gemini & ChatGPT side by side" },
+      { name: "description", content: "Send one prompt to Claude, Gemini and ChatGPT at once and compare their streaming answers." },
+      { property: "og:title", content: "NEON Triad — Compare 3 AIs" },
+      { property: "og:description", content: "One prompt, three AIs, three live answers." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -20,135 +20,117 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-function Index() {
-  const [thinking, setThinking] = useState(false);
-  const [input, setInput] = useState("");
-  const [files, setFiles] = useState<FileList | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+const PANELS = [
+  { id: "claude", name: "Claude", model: "Opus 5.5" },
+  { id: "gemini", name: "Gemini", model: "3.8 Flash" },
+  { id: "chatgpt", name: "ChatGPT", model: "GPT-6 Astra" },
+] as const;
+
+function usePanel(provider: string) {
+  return useChat({ id: provider, transport: new DefaultChatTransport({ api: "/api/chat", body: { provider } }) });
+}
+
+function Panel({ name, model, chat }: { name: string; model: string; chat: ReturnType<typeof usePanel> }) {
   const endRef = useRef<HTMLDivElement>(null);
-
-  const { messages, sendMessage, status, stop, error } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
-  });
-  const busy = status === "submitted" || status === "streaming";
-
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, status]);
-
-  const submit = () => {
-    if (busy || (!input.trim() && !files)) return;
-    sendMessage(files ? { text: input, files } : { text: input }, { body: { thinking } });
-    setInput("");
-    setFiles(null);
-    if (fileRef.current) fileRef.current.value = "";
-  };
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [chat.messages, chat.status]);
 
   return (
-    <div className="neon-bg flex h-dvh flex-col text-foreground">
-      <header className="flex items-center justify-between border-b border-border/60 px-4 py-3 backdrop-blur">
-        <div className="flex items-center gap-2">
-          <div className="neon-orb grid h-8 w-8 place-items-center rounded-lg">
-            <Zap className="h-4 w-4 text-primary-foreground" />
-          </div>
-          <span className="font-display text-lg tracking-[0.3em] neon-text">NEON</span>
-        </div>
-        <span className="rounded-full border border-border bg-card/60 px-3 py-1 font-mono text-xs text-muted-foreground">GPT-6 Astra</span>
+    <section className="composer flex min-h-[60dvh] flex-col overflow-hidden rounded-2xl lg:min-h-0">
+      <header className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
+        <span className="font-display text-sm tracking-[0.2em] neon-text">{name.toUpperCase()}</span>
+        <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{model}</span>
       </header>
-
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
-          {messages.length === 0 && (
-            <div className="mt-24 text-center">
-              <h1 className="font-display text-4xl tracking-widest neon-text sm:text-5xl">ASK ANYTHING</h1>
-              <p className="mt-3 font-mono text-sm text-muted-foreground">Code · Writing · Analysis · Images · Documents</p>
-            </div>
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex flex-col gap-4">
+          {chat.messages.length === 0 && (
+            <p className="mt-10 text-center font-mono text-xs text-muted-foreground">Waiting for a prompt…</p>
           )}
-          {messages.map((m) => (
+          {chat.messages.map((m) => (
             <div key={m.id} className={m.role === "user" ? "flex justify-end" : ""}>
-              <div className={m.role === "user" ? "user-bubble max-w-[85%] rounded-2xl px-4 py-2.5" : "w-full"}>
-                {m.parts.map((p, i) => {
-                  if (p.type === "text")
-                    return m.role === "user" ? (
+              <div className={m.role === "user" ? "user-bubble max-w-[90%] rounded-2xl px-3 py-2 text-sm" : "w-full text-sm"}>
+                {m.parts.map((p, i) =>
+                  p.type === "text" ? (
+                    m.role === "user" ? (
                       <p key={i} className="whitespace-pre-wrap">{p.text}</p>
                     ) : (
                       <div key={i} className="neon-prose">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{p.text}</ReactMarkdown>
                       </div>
-                    );
-                  if (p.type === "reasoning" && p.text)
-                    return (
-                      <details key={i} className="mb-2 rounded-lg border border-accent/40 bg-card/50 px-3 py-2 text-sm">
-                        <summary className="cursor-pointer font-mono text-xs text-accent">◆ thinking</summary>
-                        <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{p.text}</p>
-                      </details>
-                    );
-                  if (p.type === "file")
-                    return p.mediaType.startsWith("image/") ? (
-                      <img key={i} src={p.url} alt={p.filename ?? ""} className="mb-2 max-h-48 rounded-lg" />
-                    ) : (
-                      <div key={i} className="mb-2 font-mono text-xs">📎 {p.filename}</div>
-                    );
-                  return null;
-                })}
+                    )
+                  ) : null,
+                )}
               </div>
             </div>
           ))}
-          {status === "submitted" && (
+          {chat.status === "submitted" && (
             <div className="flex gap-1.5">
               <span className="neon-dot" /><span className="neon-dot [animation-delay:150ms]" /><span className="neon-dot [animation-delay:300ms]" />
             </div>
           )}
-          {error && (
-            <div className="rounded-lg border border-destructive/60 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {error.message}
+          {chat.error && (
+            <div className="rounded-lg border border-destructive/60 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {chat.error.message}
             </div>
           )}
           <div ref={endRef} />
         </div>
+      </div>
+    </section>
+  );
+}
+
+function Index() {
+  const [input, setInput] = useState("");
+  const claude = usePanel("claude");
+  const gemini = usePanel("gemini");
+  const chatgpt = usePanel("chatgpt");
+  const chats = [claude, gemini, chatgpt];
+  const busy = chats.some((c) => c.status === "submitted" || c.status === "streaming");
+
+  const submit = () => {
+    const text = input.trim();
+    if (busy || !text) return;
+    chats.forEach((c) => c.sendMessage({ text }));
+    setInput("");
+  };
+
+  return (
+    <div className="neon-bg flex h-dvh flex-col text-foreground">
+      <header className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+        <div className="neon-orb h-6 w-6 rounded-md" />
+        <span className="font-display text-lg tracking-[0.3em] neon-text">NEON TRIAD</span>
+      </header>
+
+      <main className="grid flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-3 lg:overflow-hidden">
+        {PANELS.map((p, i) => (
+          <Panel key={p.id} name={p.name} model={p.model} chat={chats[i]!} />
+        ))}
       </main>
 
-      <footer className="px-4 pb-4">
-        <div className="composer mx-auto max-w-3xl rounded-2xl p-2">
-          {files && files.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-2 pt-1">
-              {Array.from(files).map((f) => (
-                <span key={f.name} className="rounded-md bg-muted px-2 py-0.5 font-mono text-xs">{f.name}</span>
-              ))}
-              <button onClick={() => { setFiles(null); if (fileRef.current) fileRef.current.value = ""; }}>
-                <X className="h-3.5 w-3.5 text-muted-foreground" />
-              </button>
-            </div>
-          )}
+      <footer className="px-3 pb-3">
+        <div className="composer mx-auto flex max-w-4xl items-end gap-2 rounded-2xl p-2">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
-            placeholder="Transmit a message…"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            placeholder="Ask all three AIs at once…"
             rows={1}
-            className="max-h-40 w-full resize-none bg-transparent px-2 py-2 outline-none placeholder:text-muted-foreground"
+            className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 outline-none placeholder:text-muted-foreground"
           />
-          <div className="flex items-center justify-between">
-            <div className="flex gap-1">
-              <input ref={fileRef} type="file" multiple accept="image/*,application/pdf" hidden onChange={(e) => setFiles(e.target.files)} />
-              <button onClick={() => fileRef.current?.click()} className="rounded-lg p-2 text-muted-foreground hover:text-primary" aria-label="Attach">
-                <Paperclip className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setThinking((t) => !t)}
-                className={`flex items-center gap-1 rounded-lg px-2 py-1 font-mono text-xs ${thinking ? "text-accent neon-glow-accent" : "text-muted-foreground"}`}
-              >
-                <Brain className="h-4 w-4" /> Think
-              </button>
-            </div>
-            <button
-              onClick={busy ? stop : submit}
-              className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground neon-glow"
-              aria-label={busy ? "Stop" : "Send"}
-            >
-              {busy ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-            </button>
-          </div>
+          <button
+            onClick={busy ? () => chats.forEach((c) => c.stop()) : submit}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground neon-glow"
+            aria-label={busy ? "Stop" : "Send"}
+          >
+            {busy ? <Square className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+          </button>
         </div>
       </footer>
     </div>

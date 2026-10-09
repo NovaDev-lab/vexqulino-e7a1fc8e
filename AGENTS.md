@@ -9,4 +9,4 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
-- AI chat calls go through Lovable AI Gateway (Responses API) in src/routes/api/chat.ts; why: no user-supplied provider key needed and billing/logs are centralized.
+- AI chat calls go through Lovable AI Gateway in src/routes/api/chat.ts, routed by a `provider` field (Claude via native Messages, Gemini via Chat Completions, OpenAI via Responses); why: no user-supplied keys and each vendor uses its documented protocol.
