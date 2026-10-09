@@ -105,7 +105,7 @@ function Index() {
 
       <main className="grid flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-3 lg:overflow-hidden">
         {PANELS.map((p, i) => (
-          <Panel key={p.id} name={p.name} model={p.model} chat={chats[i]} />
+          <Panel key={p.id} name={p.name} model={p.model} chat={chats[i]!} />
         ))}
       </main>
 
