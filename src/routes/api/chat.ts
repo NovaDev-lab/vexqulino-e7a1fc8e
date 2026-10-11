@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { streamText, convertToModelMessages, type UIMessage } from "ai";
+import { streamText, convertToModelMessages, type UIMessage, type ToolSet } from "ai";
 import {
   createLovableAiGatewayRunIdFetch,
   getLovableAiGatewayRunId,
@@ -52,7 +52,9 @@ export const Route = createFileRoute("/api/chat")({
             model: anthropic("anthropic/claude-opus-5-5"),
             system,
             maxOutputTokens: deep ? 32000 : 16000,
-            ...(mode === "research" ? { tools: { web_search: anthropic.tools.webSearch_20260209({ maxUses: 6 }) } } : {}),
+            ...(mode === "research"
+              ? { tools: { web_search: anthropic.tools.webSearch_20260209({ maxUses: 6 }) } as unknown as ToolSet }
+              : {}),
             providerOptions: {
               anthropic: {
                 thinking: { type: "adaptive", display: "summarized" },

@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 
 - AI chat calls go through Lovable AI Gateway in src/routes/api/chat.ts, routed by a `provider` field (Claude via native Messages, Gemini via Chat Completions, OpenAI via Responses); why: no user-supplied keys and each vendor uses its documented protocol.
+- Image generation goes through src/routes/api/image.ts (Gemini/ChatGPT only), streamed SSE to the client; chat history is kept in browser localStorage; why: no accounts in this app, so history stays per-device.
