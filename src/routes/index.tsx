@@ -4,15 +4,15 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowUp, Square, Paperclip, X, Brain, Telescope, ImageIcon, MessageSquare, History, Plus, Trash2, FileText } from "lucide-react";
+import { ArrowUp, Square, Paperclip, X, Brain, Telescope, Swords, ImageIcon, MessageSquare, History, Plus, Trash2, FileText } from "lucide-react";
 import { streamImage } from "@/lib/ai/stream-image";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "NEON Triad — Claude, Gemini & ChatGPT side by side" },
+      { title: "Claude, Gemini & ChatGPT — side by side & debate" },
       { name: "description", content: "Send one prompt to Claude, Gemini and ChatGPT at once: attach files, think harder, deep research, generate images and keep chat history." },
-      { property: "og:title", content: "NEON Triad — Compare 3 AIs" },
+      { property: "og:title", content: "Compare & debate 3 AIs" },
       { property: "og:description", content: "One prompt, three AIs, three live answers — with files, deep research and images." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -27,7 +27,7 @@ const PANELS = [
   { id: "chatgpt", name: "ChatGPT", model: "GPT-6 Astra", images: true },
 ] as const;
 type ProviderId = (typeof PANELS)[number]["id"];
-type Mode = "chat" | "think" | "research" | "image";
+type Mode = "chat" | "think" | "research" | "image" | "debate";
 type Convo = { id: string; title: string; updatedAt: number; chats: Record<ProviderId, UIMessage[]> };
 
 const MODES: { id: Mode; label: string; icon: typeof Brain }[] = [
@@ -35,7 +35,10 @@ const MODES: { id: Mode; label: string; icon: typeof Brain }[] = [
   { id: "think", label: "Think harder", icon: Brain },
   { id: "research", label: "Deep research", icon: Telescope },
   { id: "image", label: "Image", icon: ImageIcon },
+  { id: "debate", label: "Debate", icon: Swords },
 ];
+const DEBATE_ROUNDS = 2;
+const lastAnswers: Record<string, string> = {};
 
 const STORE = "neon-triad-history";
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -59,7 +62,13 @@ const saveConvos = (list: Convo[]) => {
 };
 
 function usePanel(provider: string) {
-  return useChat({ id: provider, transport: new DefaultChatTransport({ api: "/api/chat", body: { provider } }) });
+  return useChat({
+    id: provider,
+    transport: new DefaultChatTransport({ api: "/api/chat", body: { provider } }),
+    onFinish: ({ message }) => {
+      lastAnswers[provider] = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("").trim();
+    },
+  });
 }
 type Chat = ReturnType<typeof usePanel>;
 
@@ -136,6 +145,8 @@ function Index() {
   const [showHistory, setShowHistory] = useState(false);
   const [imageBusy, setImageBusy] = useState<Record<string, boolean>>({});
   const imageAbort = useRef<AbortController | null>(null);
+  const debateStop = useRef(false);
+  const [debating, setDebating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const claude = usePanel("claude");
@@ -144,7 +155,7 @@ function Index() {
   const chats: Record<ProviderId, Chat> = { claude, gemini, chatgpt };
   const list = [claude, gemini, chatgpt];
   const anyImageBusy = Object.values(imageBusy).some(Boolean);
-  const busy = anyImageBusy || list.some((c) => c.status === "submitted" || c.status === "streaming");
+  const busy = debating || anyImageBusy || list.some((c) => c.status === "submitted" || c.status === "streaming");
 
   useEffect(() => setConvos(loadConvos()), []);
 
@@ -209,6 +220,11 @@ function Index() {
     const text = input.trim();
     if (busy || (!text && !files.length)) return;
     setInput("");
+    if (mode === "debate") {
+      if (!text) return;
+      void runDebate(text);
+      return;
+    }
     if (mode === "image") {
       if (!text) return;
       const ctrl = new AbortController();
@@ -228,7 +244,37 @@ function Index() {
     list.forEach((c) => c.sendMessage({ text: text || "Please look at the attached file.", files: dt.files }, { body: { mode } }));
   };
 
+  const runDebate = async (topic: string) => {
+    debateStop.current = false;
+    setDebating(true);
+    const transcript: string[] = [];
+    try {
+      for (let round = 1; round <= DEBATE_ROUNDS; round++) {
+        for (const p of PANELS) {
+          if (debateStop.current) return;
+          const others = PANELS.filter((o) => o.id !== p.id).map((o) => o.name).join(" and ");
+          const stage =
+            round === 1 && transcript.length === 0
+              ? "Give your opening statement and take a clear position."
+              : round === DEBATE_ROUNDS
+                ? "This is the final round: rebut the strongest points made so far and give your closing argument."
+                : "Respond to the previous speakers: challenge their weakest points and strengthen your position.";
+          const prompt = `⚔️ Debate topic: "${topic}"\nYou are ${p.name}, debating ${others}. Round ${round} of ${DEBATE_ROUNDS}.\n\n${
+            transcript.length ? `Debate so far:\n${transcript.join("\n\n")}\n\n` : ""
+          }${stage}`;
+          lastAnswers[p.id] = "";
+          await chats[p.id].sendMessage({ text: prompt }, { body: { mode: "debate" } });
+          if (debateStop.current) return;
+          transcript.push(`${p.name} (round ${round}): ${lastAnswers[p.id] || "(no answer)"}`);
+        }
+      }
+    } finally {
+      setDebating(false);
+    }
+  };
+
   const stopAll = () => {
+    debateStop.current = true;
     list.forEach((c) => c.stop());
     imageAbort.current?.abort();
   };
@@ -236,8 +282,6 @@ function Index() {
   return (
     <div className="neon-bg flex h-dvh flex-col text-foreground">
       <header className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
-        <div className="neon-orb h-6 w-6 rounded-md" />
-        <span className="font-display text-lg tracking-[0.3em] neon-text">NEON TRIAD</span>
         <div className="ml-auto flex gap-2">
           <button onClick={newChat} disabled={busy} className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs disabled:opacity-50" aria-label="New chat">
             <Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">New</span>
@@ -328,7 +372,7 @@ function Index() {
                   void submit();
                 }
               }}
-              placeholder={mode === "image" ? "Describe an image for Gemini & ChatGPT…" : mode === "research" ? "What should all three research?" : "Ask all three AIs at once…"}
+              placeholder={mode === "image" ? "Describe an image for Gemini & ChatGPT…" : mode === "debate" ? "Give a debate topic — the AIs will argue it out…" : mode === "research" ? "What should all three research?" : "Ask all three AIs at once…"}
               rows={1}
               className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 outline-none placeholder:text-muted-foreground"
             />
