@@ -372,7 +372,7 @@ function Index() {
                   void submit();
                 }
               }}
-              placeholder={mode === "image" ? "Describe an image for Gemini & ChatGPT…" : mode === "research" ? "What should all three research?" : "Ask all three AIs at once…"}
+              placeholder={mode === "image" ? "Describe an image for Gemini & ChatGPT…" : mode === "debate" ? "Give a debate topic — the AIs will argue it out…" : mode === "research" ? "What should all three research?" : "Ask all three AIs at once…"}
               rows={1}
               className="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 outline-none placeholder:text-muted-foreground"
             />
