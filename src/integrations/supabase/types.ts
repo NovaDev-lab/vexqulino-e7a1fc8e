@@ -14,13 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          id: string
+          plan: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          id: string
+          plan?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          id?: string
+          plan?: string
+        }
+        Relationships: []
+      }
+      prompt_log: {
+        Row: {
+          created_at: string
+          prompt_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          prompt_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          prompt_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      consume_prompt: { Args: { p_prompt_id: string }; Returns: boolean }
+      my_usage: {
+        Args: never
+        Returns: {
+          daily_limit: number
+          plan: string
+          used: number
+        }[]
+      }
+      plan_limit: { Args: { p_email: string; p_plan: string }; Returns: number }
     }
     Enums: {
       [_ in never]: never
