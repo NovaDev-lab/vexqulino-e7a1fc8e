@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { checkQuota } from "@/lib/quota.server";
 
 const BASE = "https://ai.gateway.lovable.dev";
 const MODELS: Record<string, { model: string; format: "openai" | "gemini-chat" }> = {
@@ -12,14 +13,17 @@ export const Route = createFileRoute("/api/image")({
       POST: async ({ request }) => {
         const apiKey = process.env["LOVABLE_API_KEY"];
         if (!apiKey) return new Response("AI is not configured", { status: 500 });
-        const { prompt, provider, stream } = (await request.json()) as {
+        const { prompt, provider, stream, promptId } = (await request.json()) as {
           prompt?: string;
           provider?: string;
           stream?: boolean;
+          promptId?: string;
         };
         const cfg = provider ? MODELS[provider] : undefined;
         if (!cfg) return new Response("Image generation isn't available for this AI", { status: 400 });
         if (!prompt?.trim()) return new Response("Prompt is required", { status: 400 });
+        const denied = await checkQuota(request, promptId);
+        if (denied) return denied;
 
         const input =
           cfg.format === "openai"
