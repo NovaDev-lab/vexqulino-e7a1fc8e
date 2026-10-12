@@ -6,6 +6,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ArrowUp, Square, Paperclip, X, Brain, Telescope, Swords, ImageIcon, MessageSquare, History, Plus, Trash2, FileText } from "lucide-react";
 import { streamImage } from "@/lib/ai/stream-image";
+import { Link } from "@tanstack/react-router";
+import { useAuth, authHeader } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -64,7 +67,7 @@ const saveConvos = (list: Convo[]) => {
 function usePanel(provider: string) {
   return useChat({
     id: provider,
-    transport: new DefaultChatTransport({ api: "/api/chat", body: { provider } }),
+    transport: new DefaultChatTransport({ api: "/api/chat", body: { provider }, headers: authHeader }),
     onFinish: ({ message }) => {
       lastAnswers[provider] = message.parts.map((p) => (p.type === "text" ? p.text : "")).join("").trim();
     },
@@ -148,6 +151,7 @@ function Index() {
   const debateStop = useRef(false);
   const [debating, setDebating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { user, ready, usage, refreshUsage } = useAuth();
 
   const claude = usePanel("claude");
   const gemini = usePanel("gemini");
@@ -158,6 +162,10 @@ function Index() {
   const busy = debating || anyImageBusy || list.some((c) => c.status === "submitted" || c.status === "streaming");
 
   useEffect(() => setConvos(loadConvos()), []);
+  useEffect(() => {
+    if (!busy && user) void refreshUsage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy]);
 
   // Save the current conversation whenever all three finish.
   useEffect(() => {
@@ -199,7 +207,7 @@ function Index() {
     if (id === currentId) newChat();
   };
 
-  const runImage = async (id: ProviderId, prompt: string, signal: AbortSignal) => {
+  const runImage = async (id: ProviderId, prompt: string, signal: AbortSignal, promptId: string) => {
     const chat = chats[id];
     const userMsg: UIMessage = { id: uid(), role: "user", parts: [{ type: "text", text: `🎨 ${prompt}` }] };
     const asstId = uid();
@@ -208,7 +216,7 @@ function Index() {
     const show = (parts: UIMessage["parts"]) =>
       chat.setMessages((m) => [...m.filter((x) => x.id !== asstId), { id: asstId, role: "assistant", parts }]);
     try {
-      await streamImage("/api/image", { prompt, provider: id }, (url) => show([{ type: "file", mediaType: "image/png", url }]), signal);
+      await streamImage("/api/image", { prompt, provider: id, promptId }, (url) => show([{ type: "file", mediaType: "image/png", url }]), signal, await authHeader());
     } catch (e) {
       if (!signal.aborted) show([{ type: "text", text: `⚠️ ${e instanceof Error ? e.message : "Image generation failed"}` }]);
     } finally {
@@ -220,10 +228,12 @@ function Index() {
   const submit = async () => {
     const text = input.trim();
     if (busy || (!text && !files.length)) return;
+    if (!user) return;
+    const promptId = uid();
     setInput("");
     if (mode === "debate") {
       if (!text) return;
-      void runDebate(text);
+      void runDebate(text, promptId);
       return;
     }
     if (mode === "image") {
@@ -235,17 +245,17 @@ function Index() {
         { id: uid(), role: "user", parts: [{ type: "text", text: `🎨 ${text}` }] },
         { id: uid(), role: "assistant", parts: [{ type: "text", text: "_Claude can't create images — see Gemini and ChatGPT._" }] },
       ]);
-      void runImage("gemini", text, ctrl.signal);
-      void runImage("chatgpt", text, ctrl.signal);
+      void runImage("gemini", text, ctrl.signal, promptId);
+      void runImage("chatgpt", text, ctrl.signal, promptId);
       return;
     }
     const dt = new DataTransfer();
     files.forEach((f) => dt.items.add(f));
     setFiles([]);
-    list.forEach((c) => c.sendMessage({ text: text || "Please look at the attached file.", files: dt.files }, { body: { mode } }));
+    list.forEach((c) => c.sendMessage({ text: text || "Please look at the attached file.", files: dt.files }, { body: { mode, promptId } }));
   };
 
-  const runDebate = async (topic: string) => {
+  const runDebate = async (topic: string, promptId: string) => {
     debateStop.current = false;
     setDebating(true);
     const transcript: string[] = [];
@@ -264,7 +274,7 @@ function Index() {
             transcript.length ? `Debate so far:\n${transcript.join("\n\n")}\n\n` : ""
           }${stage}`;
           lastAnswers[p.id] = "";
-          await chats[p.id].sendMessage({ text: prompt }, { body: { mode: "debate" } });
+          await chats[p.id].sendMessage({ text: prompt }, { body: { mode: "debate", promptId } });
           if (debateStop.current) return;
           transcript.push(`${p.name} (round ${round}): ${lastAnswers[p.id] || "(no answer)"}`);
         }
@@ -283,7 +293,20 @@ function Index() {
   return (
     <div className="neon-bg flex h-dvh flex-col text-foreground">
       <header className="flex items-center gap-2 border-b border-border/60 px-4 py-3">
+        <div className="flex items-center gap-3 text-xs">
+          <Link to="/pricing" className="text-muted-foreground hover:text-foreground">Pricing</Link>
+          {user && usage && (
+            <span className="font-mono text-[11px] text-muted-foreground">
+              {usage.daily_limit === null ? `${usage.used} today · unlimited` : `${usage.used}/${usage.daily_limit} today`}
+            </span>
+          )}
+        </div>
         <div className="ml-auto flex gap-2">
+          {ready && (user ? (
+            <button onClick={() => void supabase.auth.signOut()} className="rounded-lg border border-border px-2.5 py-1.5 text-xs">Sign out</button>
+          ) : (
+            <Link to="/auth" className="rounded-lg bg-primary px-2.5 py-1.5 text-xs text-primary-foreground neon-glow">Sign in</Link>
+          ))}
           <button onClick={newChat} disabled={busy} className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs disabled:opacity-50" aria-label="New chat">
             <Plus className="h-3.5 w-3.5" /> <span className="hidden sm:inline">New</span>
           </button>
@@ -333,6 +356,11 @@ function Index() {
             </button>
           ))}
         </div>
+        {ready && !user && (
+          <p className="mx-auto mb-2 max-w-4xl text-center text-xs text-muted-foreground">
+            <Link to="/auth" className="text-primary underline">Sign in or sign up free</Link> to chat — 100 prompts a day on the Free plan.
+          </p>
+        )}
         <div className="composer mx-auto max-w-4xl rounded-2xl p-2">
           {files.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5 px-1">
