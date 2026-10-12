@@ -8,6 +8,7 @@ import {
   getLovableAiGatewayRunId,
   withLovableAiGatewayRunIdHeader,
 } from "@/lib/ai/run-id.server";
+import { checkQuota } from "@/lib/quota.server";
 
 const BASE = "https://ai.gateway.lovable.dev/v1";
 type Mode = "chat" | "think" | "research" | "debate";
@@ -29,7 +30,9 @@ export const Route = createFileRoute("/api/chat")({
         const apiKey = process.env["LOVABLE_API_KEY"];
         if (!apiKey) return new Response("AI is not configured", { status: 500 });
 
-        const body = (await request.json()) as { messages: UIMessage[]; provider?: string; mode?: Mode };
+        const body = (await request.json()) as { messages: UIMessage[]; provider?: string; mode?: Mode; promptId?: string };
+        const denied = await checkQuota(request, body.promptId);
+        if (denied) return denied;
         const mode: Mode = body.mode === "think" || body.mode === "research" || body.mode === "debate" ? body.mode : "chat";
         const system = SYSTEMS[mode];
         const deep = mode === "think" || mode === "research";
