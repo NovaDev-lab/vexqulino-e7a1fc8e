@@ -213,6 +213,7 @@ function Index() {
       if (!signal.aborted) show([{ type: "text", text: `⚠️ ${e instanceof Error ? e.message : "Image generation failed"}` }]);
     } finally {
       setImageBusy((b) => ({ ...b, [id]: false }));
+      void refreshUsage();
     }
   };
 
